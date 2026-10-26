@@ -586,9 +586,30 @@ typer.addEventListener('input', function(){
   if(composing) return;
   for(var i = 0; i < v.length; i++){ if(!handleChar(v[i])) break; }
 });
+/* 中文输入法打开时 e.key 是 'Process'，改用物理按键 e.code 还原字符 */
+var CODE_PUNCT = {Space:[' ',' '], Quote:["'",'"'], Comma:[',','<'], Period:['.','>'], Minus:['-','_'], Slash:['/','?'], Semicolon:[';',':'], Equal:['=','+'], Backquote:['`','~'], BracketLeft:['[','{'], BracketRight:[']','}'], Backslash:['\\','|']};
+var SHIFT_DIGIT = ')!@#$%^&*(';
+function keyToChar(e){
+  if(e.ctrlKey || e.metaKey || e.altKey) return null;
+  if(e.key && e.key.length === 1) return e.key;
+  var c = e.code || '', m;
+  if((m = c.match(/^Key([A-Z])$/))){
+    var up = e.shiftKey !== (e.getModifierState && e.getModifierState('CapsLock'));
+    return up ? m[1] : m[1].toLowerCase();
+  }
+  if((m = c.match(/^Digit([0-9])$/))) return e.shiftKey ? SHIFT_DIGIT[+m[1]] : m[1];
+  if(CODE_PUNCT[c]) return CODE_PUNCT[c][e.shiftKey ? 1 : 0];
+  return null;
+}
 typer.addEventListener('keydown', function(e){
-  if(e.key === 'Tab' && !e.shiftKey){ e.preventDefault(); if(idx < cur.ep.lines.length) speak(target); }
-  else if(e.key === 'Escape'){ e.preventDefault(); restartLine(); }
+  if(e.key === 'Tab' && !e.shiftKey){ e.preventDefault(); if(idx < cur.ep.lines.length) speak(target); return; }
+  if(e.key === 'Escape'){ e.preventDefault(); restartLine(); return; }
+  if(e.key === 'Backspace' || e.key === 'Enter'){ e.preventDefault(); return; }
+  var ch = keyToChar(e);
+  if(ch === null) return;            // 手机键盘等拿不到按键信息的情况，交给 input 事件处理
+  e.preventDefault();
+  typer.value = '';
+  handleChar(ch);
 });
 stage.addEventListener('click', function(e){
   if(e.target.closest('button,select,label,a')) return;
@@ -836,18 +857,22 @@ $('tpl').textContent = JSON.stringify({
 /* ---------- 启动 ---------- */
 loadVoices();
 var legacy = store.custom; store.custom = [];
-dbGet().catch(function(){ return null; }).then(function(lib){
+var started = false;
+function begin(){
+  if(started) return; started = true;
+  var last = store.last || {};
+  try { if(remote.length) $('imp').open = false; } catch(e) {}
+  setEpisode(last.show || base()[0].id, last.ep || base()[0].eps[0].id);
+}
+setTimeout(function(){ begin(); }, 4000);   // 即使存储或网络卡住，也保证页面能用
+Promise.race([dbGet().catch(function(){ return null; }), new Promise(function(r){ setTimeout(function(){ r(null); }, 1500); })]).then(function(lib){
   store.custom = Array.isArray(lib) ? lib : [];
   if(legacy.length){
     legacy.forEach(function(sh){ if(!store.custom.some(function(x){ return x.name === sh.name; })) store.custom.push(sh); });
     persistLib();
   }
   return loadRemote();
-}).then(function(){
-  var last = store.last || {};
-  if(remote.length) $('imp').open = false;
-  setEpisode(last.show || base()[0].id, last.ep || base()[0].eps[0].id);
-});
+}).then(begin, begin);
 })();
 </script>
 </body>
