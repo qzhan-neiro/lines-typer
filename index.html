@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light} body{margin:0}</style>
+<title>台词打字机</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Courier+Prime:wght@400;700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: left rail = script/episode picker, import, full line list; right = a "script page" stage where you type one line at a time, with settings underneath. Phone: picker, stage, lines stack. */
+:root{
+  --bg:#E8EBEF; --paper:#F8F9FB; --fg:#141922; --muted:#586272; --line:#CBD1D9;
+  --ink:#141922; --on-ink:#F8F9FB;
+  --hi:#FFD54A; --hi-fg:#141922;
+  --ok:#1B7A4B; --ok-bg:#DDF2E6; --bad:#BE3228; --bad-bg:#FBE4E1;
+  --f-display:"Bricolage Grotesque","PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-body:"Instrument Sans","PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-script:"Courier Prime","Courier New",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1217; --paper:#161B22; --fg:#E7EBF0; --muted:#94A1AF; --line:#28313B;
+    --ink:#E7EBF0; --on-ink:#0E1217;
+    --hi:#F2B705; --hi-fg:#0E1217;
+    --ok:#6AD59E; --ok-bg:#15301F; --bad:#FF8C84; --bad-bg:#3A1D1C;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1217; --paper:#161B22; --fg:#E7EBF0; --muted:#94A1AF; --line:#28313B;
+  --ink:#E7EBF0; --on-ink:#0E1217;
+  --hi:#F2B705; --hi-fg:#0E1217;
+  --ok:#6AD59E; --ok-bg:#15301F; --bad:#FF8C84; --bad-bg:#3A1D1C;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--f-body); font-size:15px; line-height:1.55;
+  padding-block:28px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap{max-width:1120px; margin:0 auto}
+button,select,input,textarea{font:inherit; color:inherit}
+:focus-visible{outline:2px solid var(--fg); outline-offset:2px}
+
+.top{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 20px; margin-bottom:22px}
+.top h1{font-family:var(--f-display); font-weight:700; font-size:clamp(1.7rem, 1.2rem + 2vw, 2.4rem); line-height:1.1; margin:0; letter-spacing:-.01em}
+.top p{margin:0; color:var(--muted); min-width:0}
+
+.grid{
+  display:grid; gap:20px 24px; align-items:start;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"pick" "main" "lines";
+}
+@media (min-width:920px){
+  .grid{grid-template-columns:minmax(0,320px) minmax(0,1fr); grid-template-areas:"pick main" "lines main"}
+}
+.pick{grid-area:pick; min-width:0}
+.main{grid-area:main; min-width:0; display:flex; flex-direction:column; gap:16px}
+.lines{grid-area:lines; min-width:0}
+
+h2{font-family:var(--f-display); font-weight:600; font-size:.8rem; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+.pick h2:not(:first-child){margin-top:18px}
+
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{
+  border:1px solid var(--line); background:transparent; border-radius:5px; padding:6px 11px; cursor:pointer; text-align:left; min-width:0;
+}
+.chip:hover{border-color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--ink); color:var(--on-ink); border-color:var(--ink)}
+.chip small{opacity:.7; font-variant-numeric:tabular-nums; margin-left:6px}
+
+.btn{
+  border:1px solid var(--line); background:transparent; border-radius:5px; padding:7px 13px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:7px;
+}
+.btn:hover{border-color:var(--fg)}
+.btn.pri{background:var(--ink); color:var(--on-ink); border-color:var(--ink); font-weight:600}
+.btn.warn{color:var(--bad); border-color:var(--bad)}
+.btn svg{width:16px; height:16px; fill:currentColor; flex:none}
+.linkbtn{background:none; border:0; padding:0; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:.88rem}
+.linkbtn:hover{color:var(--fg)}
+#delrow{margin-top:10px}
+
+details.imp{margin-top:18px; border-top:1px solid var(--line); padding-top:14px}
+details.imp summary{cursor:pointer; font-weight:600; list-style:none; display:flex; align-items:center; gap:8px}
+details.imp summary::-webkit-details-marker{display:none}
+details.imp summary::before{content:"+"; display:inline-grid; place-items:center; width:20px; height:20px; border:1px solid var(--line); border-radius:4px; font-family:var(--f-script)}
+details.imp[open] summary::before{content:"–"}
+.form{display:flex; flex-direction:column; gap:10px; margin-top:12px}
+.form label{display:flex; flex-direction:column; gap:4px; font-size:.86rem; color:var(--muted)}
+.form input[type=text], .form textarea{
+  border:1px solid var(--line); background:var(--paper); border-radius:5px; padding:8px 10px; color:var(--fg); width:100%; min-width:0;
+}
+.form textarea{min-height:150px; font-family:var(--f-script); font-size:.88rem; resize:vertical}
+.form .chk{flex-direction:row; align-items:center; gap:8px; color:var(--fg)}
+.note{font-size:.82rem; color:var(--muted); margin:0}
+.drop{border:1.5px dashed var(--line); border-radius:8px; padding:18px 12px; text-align:center; color:var(--muted); background:var(--paper); cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--fg); color:var(--fg)}
+.btnrow{display:flex; flex-wrap:wrap; gap:8px}
+.tpl{margin:0; padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:var(--paper); font-family:var(--f-script); font-size:.8rem; line-height:1.5; overflow-x:auto; white-space:pre}
+#lib{display:flex; flex-direction:column; gap:12px}
+.lg{border:1px solid var(--line); border-radius:6px; padding:8px 10px; min-width:0}
+.lh{display:flex; justify-content:space-between; gap:8px; align-items:baseline}
+.lh span{color:var(--muted); font-size:.82rem; flex:none}
+.lr{display:flex; justify-content:space-between; gap:10px; align-items:baseline; padding-top:4px}
+.lr .lt{min-width:0; text-align:left; text-decoration:none; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lr .lt:hover{text-decoration:underline}
+.lr .linkbtn{flex:none}
+#impmsg{min-height:1.3em; font-size:.86rem; margin:0}
+#impmsg.err{color:var(--bad)} #impmsg.okk{color:var(--ok)}
+
+/* stage */
+.stage{
+  position:relative; background:var(--paper); border:1px solid var(--line); border-radius:8px;
+  padding:22px clamp(16px, 4vw, 40px) 18px; transition:background-color .15s;
+}
+.stage:focus-within{border-color:var(--fg)}
+.stage.bad{background:var(--bad-bg)}
+.stage.good{background:var(--ok-bg)}
+.stage.shake .target{animation:shake .32s}
+@keyframes shake{20%{transform:translateX(-7px)}45%{transform:translateX(6px)}70%{transform:translateX(-4px)}100%{transform:none}}
+@media (prefers-reduced-motion: reduce){.stage.shake .target{animation:none}.stage{transition:none}}
+.fh{
+  position:absolute; top:12px; right:14px; font-size:.78rem; background:var(--hi); color:var(--hi-fg);
+  padding:2px 9px; border-radius:99px; font-weight:600; opacity:0; pointer-events:none;
+}
+.stage:not(:focus-within) .fh{opacity:1}
+.scene{font-family:var(--f-script); font-size:.8rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding-right:120px; overflow-wrap:anywhere}
+.prev{font-family:var(--f-script); font-size:.9rem; color:var(--muted); margin-top:22px; min-height:1.5em; overflow-wrap:anywhere}
+.prev b{font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-right:8px}
+.speaker{font-family:var(--f-script); font-weight:700; letter-spacing:.14em; text-transform:uppercase; margin-top:16px}
+.target{
+  font-family:var(--f-script); font-size:clamp(1.2rem, 1rem + 1.5vw, 1.7rem); line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere;
+  margin-top:4px; padding-bottom:4px;
+}
+.target .w{display:inline-block; white-space:pre}
+.target .w.ok{cursor:pointer}
+.target .w.ok:hover{text-decoration:underline; text-decoration-thickness:1px}
+.target .u{color:var(--muted)}
+.target .d{color:var(--fg); font-weight:700}
+.target .c{background:var(--hi); color:var(--hi-fg); border-radius:2px}
+.target .s{display:inline-block; white-space:pre}
+.zh{margin-top:6px; color:var(--muted); min-height:1.55em}
+.msg{margin-top:10px; min-height:1.6em; font-size:.92rem; font-weight:500}
+.msg.err{color:var(--bad)} .msg.okk{color:var(--ok)}
+.actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.stats{
+  display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; margin-top:20px; padding-top:14px; border-top:1px solid var(--line);
+}
+.stats div{min-width:0}
+.stats dt{font-size:.74rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.stats dd{margin:0; font-family:var(--f-script); font-weight:700; font-size:1.15rem; font-variant-numeric:tabular-nums}
+@media (max-width:480px){.stats{grid-template-columns:repeat(2, minmax(0,1fr))}}
+.bar{height:4px; background:var(--line); border-radius:2px; margin-top:14px; overflow:hidden}
+.bar i{display:block; height:100%; background:var(--fg); width:0; transition:width .25s}
+.keys{margin:12px 0 0; font-size:.8rem; color:var(--muted)}
+.sr{position:absolute; opacity:0; width:1px; height:1px; left:0; top:0; border:0; padding:0; font-size:16px}
+
+.fin h3{font-family:var(--f-display); font-size:1.6rem; margin:22px 0 4px}
+.fin dl{display:grid; grid-template-columns:repeat(auto-fit, minmax(110px,1fr)); gap:12px; margin:16px 0}
+.fin dt{font-size:.74rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.fin dd{margin:0; font-family:var(--f-script); font-weight:700; font-size:1.5rem; font-variant-numeric:tabular-nums}
+
+.settings{border:1px solid var(--line); border-radius:8px; padding:14px clamp(14px,3vw,22px)}
+.sgrid{display:grid; grid-template-columns:repeat(auto-fit, minmax(210px,1fr)); gap:10px 22px}
+.sgrid label{display:flex; align-items:center; gap:9px; min-width:0}
+.sgrid label.sel{flex-direction:column; align-items:stretch; gap:3px; font-size:.86rem; color:var(--muted)}
+.sgrid select{border:1px solid var(--line); background:var(--paper); border-radius:5px; padding:6px 8px; width:100%; min-width:0; color:var(--fg)}
+input[type=checkbox]{accent-color:var(--ink); width:17px; height:17px; flex:none}
+
+ol#linelist{list-style:none; margin:0; padding:0; max-height:380px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--paper)}
+#linelist li{border-bottom:1px solid var(--line)}
+#linelist li:last-child{border-bottom:0}
+#linelist button{
+  width:100%; display:grid; grid-template-columns:2rem minmax(0,1fr); gap:6px; text-align:left; background:none; border:0; padding:8px 12px; cursor:pointer;
+}
+#linelist button:hover{background:var(--bg)}
+#linelist .n{font-family:var(--f-script); color:var(--muted); font-variant-numeric:tabular-nums}
+#linelist .t{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.9rem}
+#linelist .t b{font-family:var(--f-script); text-transform:uppercase; letter-spacing:.05em; margin-right:7px; font-size:.82rem}
+#linelist li.cur button{background:var(--hi); color:var(--hi-fg)}
+#linelist li.cur .n{color:var(--hi-fg)}
+#linelist li.done .n{color:var(--ok); font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>台词打字机</h1>
+    <p>选一部剧，听一句，照着打。打错一个字符，整句从头再来。</p>
+  </header>
+
+  <div class="grid">
+    <section class="pick" aria-label="选择剧本">
+      <h2>剧本</h2>
+      <div id="shows" class="chips"></div>
+      <h2>集数</h2>
+      <div id="eps" class="chips"></div>
+      <div id="delrow"></div>
+
+      <details class="imp" id="imp" open>
+        <summary>本地剧本：导入 JSON</summary>
+        <div class="form">
+          <div class="drop" id="drop" tabindex="0" role="button">把 .json 文件或整个文件夹拖到这里</div>
+          <div class="btnrow">
+            <button class="btn pri" type="button" id="b-files">选择 JSON 文件</button>
+            <button class="btn" type="button" id="b-folder">选择文件夹</button>
+          </div>
+          <input type="file" id="f-files" accept=".json,application/json" multiple hidden>
+          <input type="file" id="f-folder" webkitdirectory multiple hidden>
+          <label class="chk" for="i-strip">
+            <input type="checkbox" id="i-strip" checked> 自动删除 [ ] 和 ( ) 里的舞台说明
+          </label>
+          <p id="impmsg" role="status"></p>
+          <div id="lib"></div>
+          <h2>JSON 格式</h2>
+          <pre class="tpl" id="tpl"></pre>
+          <div><button class="btn" type="button" id="b-copytpl">复制模板</button></div>
+          <p class="note">一个文件一集。文件夹名会当作剧名（JSON 里写了 show 就以它为准），重复导入同一集会覆盖。order 决定集数顺序，不写则按文件名排序。一个文件也可以写成 {"show":"剧名","episodes":[{"episode":"…","lines":[…]}]}，把整季放在一起。台词也可以简写成 ["人名","English","中文"]。导入后的剧本保存在这台设备的浏览器里。</p>
+        </div>
+      </details>
+    </section>
+
+    <div class="main">
+      <section class="stage" id="stage" aria-label="打字练习">
+        <span class="fh">点击这里，开始打字</span>
+        <div class="scene" id="scene"></div>
+
+        <div id="practice">
+          <div class="prev" id="prev"></div>
+          <div class="speaker" id="speaker"></div>
+          <div class="target" id="target"></div>
+          <div class="zh" id="zh"></div>
+          <div class="msg" id="msg" role="status" aria-live="polite"></div>
+          <div class="actions">
+            <button class="btn pri" type="button" id="b-play">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+              听发音
+            </button>
+            <button class="btn" type="button" id="b-restart">本句重来</button>
+            <button class="btn" type="button" id="b-prev">上一句</button>
+            <button class="btn" type="button" id="b-skip">跳过</button>
+          </div>
+          <p class="keys">Tab 重听 · Esc 本句重来 · 打完的单词可以点一下听发音 · 请用英文输入法</p>
+        </div>
+
+        <div class="fin" id="fin" hidden></div>
+
+        <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+        <dl class="stats">
+          <div><dt>进度</dt><dd id="st-line">0 / 0</dd></div>
+          <div><dt>准确率</dt><dd id="st-acc">–</dd></div>
+          <div><dt>速度 WPM</dt><dd id="st-wpm">–</dd></div>
+          <div><dt>打错次数</dt><dd id="st-err">0</dd></div>
+        </dl>
+        <input id="typer" class="sr" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="在这里打字">
+      </section>
+
+      <section class="settings" aria-label="设置">
+        <h2>设置</h2>
+        <div class="sgrid">
+          <label for="o-auto"><input type="checkbox" id="o-auto"> 每句开始时自动朗读</label>
+          <label for="o-dict"><input type="checkbox" id="o-dict"> 听写模式（隐藏字母）</label>
+          <label for="o-zh"><input type="checkbox" id="o-zh"> 显示中文</label>
+          <label for="o-icase"><input type="checkbox" id="o-icase"> 忽略大小写</label>
+          <label for="o-ipunct"><input type="checkbox" id="o-ipunct"> 自动跳过标点</label>
+          <label class="sel" for="o-rate">朗读速度
+            <select id="o-rate">
+              <option value="0.6">0.6× 很慢</option>
+              <option value="0.8">0.8× 慢</option>
+              <option value="1">1× 正常</option>
+              <option value="1.2">1.2× 快</option>
+            </select>
+          </label>
+          <label class="sel" for="o-voice">声音
+            <select id="o-voice"><option value="">系统默认</option></select>
+          </label>
+        </div>
+      </section>
+    </div>
+
+    <section class="lines" aria-label="全部台词">
+      <h2>全部台词</h2>
+      <ol id="linelist"></ol>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- 离线兜底示例（读不到 scripts/ 时使用） ---------- */
+var BUILTIN = [{"id": "demo", "name": "Offline Demo", "eps": [{"id": "e1", "title": "Demo", "lines": [["Maya", "Good morning! You look like you didn't sleep at all.", "早上好！你看起来一夜没睡。"], ["Ben", "I didn't. My neighbor practiced the drums until three.", "我确实没睡。邻居练鼓练到凌晨三点。"], ["Maya", "Then you need a large coffee, and maybe a nap.", "那你需要一大杯咖啡，也许还要小睡一会儿。"], ["Ben", "Just the coffee, please. I have a meeting at nine.", "只要咖啡就好。我九点有个会。"]]}]}];
+
+/* ---------- 存储 ---------- */
+var KEY = 'lines-typer.v1';
+var DEF_OPTS = {auto:true, dict:false, zh:true, icase:true, ipunct:true, rate:0.8, voice:''};
+function loadStore(){
+  var s = null;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch(e) {}
+  s = (s && typeof s === 'object') ? s : {};
+  s.custom = Array.isArray(s.custom) ? s.custom : [];
+  s.prog = s.prog || {};
+  s.opts = Object.assign({}, DEF_OPTS, s.opts || {});
+  return s;
+}
+var store = loadStore();
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(store, function(k, v){ return k === 'custom' ? undefined : v; })); } catch(e) {} }
+
+/* ---------- 工具 ---------- */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+var remote = [];
+function base(){ return remote.length ? remote : BUILTIN; }
+function shows(){ return base().concat(store.custom); }
+function normText(s){
+  return String(s).replace(/[‘’ʼ]/g,"'").replace(/[“”]/g,'"')
+    .replace(/…/g,'...').replace(/[–—]/g,'-').replace(/ /g,' ').replace(/\s+/g,' ').trim();
+}
+function baseChar(c){
+  c = c.replace(/[‘’]/g,"'").replace(/[“”]/g,'"');
+  try { c = c.normalize('NFD').replace(/[̀-ͯ]/g,''); } catch(e) {}
+  return c;
+}
+function same(a,b){
+  a = baseChar(a); b = baseChar(b);
+  return store.opts.icase ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+function isPunct(c){ return /[^\p{L}\p{N}\s]/u.test(c); }
+function charName(c){ return c === ' ' ? '空格' : '「' + c + '」'; }
+
+/* ---------- 状态 ---------- */
+var cur = {show:null, ep:null};
+var idx = 0, pos = 0, target = '', locked = false, timer = null, composing = false, lineWrong = 0;
+var S = {right:0, wrong:0, ms:0, last:0, lines:0};
+var msgTimer = null;
+
+function pkey(){ return cur.show.id + '/' + cur.ep.id; }
+function prog(){ var k = pkey(); if(!store.prog[k]) store.prog[k] = {idx:0, done:[]}; return store.prog[k]; }
+function resetStats(){ S = {right:0, wrong:0, ms:0, last:0, lines:0}; }
+
+/* ---------- 选择剧本 ---------- */
+function setEpisode(showId, epId){
+  var sh = shows().filter(function(x){ return x.id === showId; })[0] || shows()[0];
+  var ep = sh.eps.filter(function(x){ return x.id === epId; })[0] || sh.eps[0];
+  cur.show = sh; cur.ep = ep;
+  store.last = {show:sh.id, ep:ep.id}; save();
+  clearTimeout(timer); locked = false;
+  resetStats();
+  idx = Math.min(prog().idx, ep.lines.length);
+  renderPicker(); renderLines(); renderStage(false);
+}
+
+function renderPicker(){
+  var sh = $('shows'); sh.innerHTML = '';
+  shows().forEach(function(s){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = s.name;
+    b.setAttribute('aria-pressed', s.id === cur.show.id ? 'true' : 'false');
+    b.onclick = function(){ setEpisode(s.id, s.eps[0].id); };
+    sh.appendChild(b);
+  });
+  var ep = $('eps'); ep.innerHTML = '';
+  cur.show.eps.forEach(function(e){
+    var p = store.prog[cur.show.id + '/' + e.id];
+    var n = p ? p.done.length : 0;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip';
+    b.setAttribute('aria-pressed', e.id === cur.ep.id ? 'true' : 'false');
+    b.innerHTML = esc(e.title) + '<small>' + n + '/' + e.lines.length + '</small>';
+    b.onclick = function(){ setEpisode(cur.show.id, e.id); };
+    ep.appendChild(b);
+  });
+  var d = $('delrow'); d.innerHTML = '';
+  if(cur.show.custom){
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'linkbtn'; b.textContent = '删除剧本「' + cur.show.name + '」';
+    var armed = false, t;
+    b.onclick = function(){
+      if(!armed){ armed = true; b.textContent = '再点一次，确认删除'; t = setTimeout(function(){ armed = false; b.textContent = '删除剧本「' + cur.show.name + '」'; }, 3000); return; }
+      clearTimeout(t);
+      var id = cur.show.id;
+      store.custom = store.custom.filter(function(x){ return x.id !== id; });
+      Object.keys(store.prog).forEach(function(k){ if(k.indexOf(id + '/') === 0) delete store.prog[k]; });
+      save(); persistLib(); setEpisode(base()[0].id, base()[0].eps[0].id);
+    };
+    d.appendChild(b);
+  }
+  renderLib();
+}
+
+function renderLines(){
+  var ol = $('linelist'); ol.innerHTML = '';
+  var p = prog();
+  cur.ep.lines.forEach(function(l, i){
+    var li = document.createElement('li');
+    if(p.done.indexOf(i) >= 0) li.className = 'done';
+    if(i === idx) li.className += ' cur';
+    var b = document.createElement('button'); b.type = 'button';
+    b.innerHTML = '<span class="n">' + (p.done.indexOf(i) >= 0 ? '✓' : (i + 1)) + '</span><span class="t"><b>' + esc(l[0] || '') + '</b>' + esc(l[1]) + '</span>';
+    b.onclick = function(){ jump(i); };
+    li.appendChild(b); ol.appendChild(li);
+  });
+  var c = ol.querySelector('.cur'); if(c){ var top = c.offsetTop - ol.clientHeight / 2; ol.scrollTop = Math.max(0, top); }
+}
+
+/* ---------- 舞台 ---------- */
+function renderStage(speakNow){
+  $('scene').textContent = cur.show.name + ' — ' + cur.ep.title;
+  var total = cur.ep.lines.length;
+  if(idx >= total){ showFinish(); return; }
+  $('practice').hidden = false; $('fin').hidden = true;
+  var l = cur.ep.lines[idx];
+  target = normText(l[1]); pos = 0; lineWrong = 0;
+  skipPunct();
+  var pv = cur.ep.lines[idx - 1];
+  $('prev').innerHTML = pv ? '<b>' + esc(pv[0] || '') + '</b>' + esc(pv[1]) : '';
+  $('speaker').textContent = l[0] || '旁白';
+  $('zh').textContent = (store.opts.zh && l[2]) ? l[2] : '';
+  setMsg('', '');
+  draw(); updateStats();
+  if(speakNow && store.opts.auto) speak(target);
+}
+
+function draw(){
+  var words = target.split(' '), html = '', i = 0;
+  words.forEach(function(w, wi){
+    var all = true, inner = '';
+    for(var k = 0; k < w.length; k++, i++){
+      var ch = w[k], st = i < pos ? 'd' : (i === pos ? 'c' : 'u');
+      if(i >= pos) all = false;
+      var shown = (store.opts.dict && i >= pos && /[\p{L}\p{N}]/u.test(ch)) ? '_' : ch;
+      inner += '<span class="' + st + '">' + esc(shown) + '</span>';
+    }
+    html += '<span class="w' + (all ? ' ok' : '') + '" data-w="' + esc(w) + '">' + inner + '</span>';
+    if(wi < words.length - 1){
+      html += '<span class="s ' + (i < pos ? 'd' : (i === pos ? 'c' : 'u')) + '"> </span>'; i++;
+    }
+  });
+  $('target').innerHTML = html;
+}
+
+function updateStats(){
+  var total = cur.ep.lines.length;
+  $('st-line').textContent = Math.min(idx + 1, total) + ' / ' + total;
+  var n = S.right + S.wrong;
+  $('st-acc').textContent = n ? Math.round(S.right / n * 100) + '%' : '–';
+  $('st-wpm').textContent = S.ms > 2500 ? Math.round((S.right / 5) / (S.ms / 60000)) : '–';
+  $('st-err').textContent = S.wrong;
+  $('bar').style.width = (prog().done.length / total * 100) + '%';
+}
+
+function setMsg(text, kind, ms){
+  var m = $('msg'); m.textContent = text; m.className = 'msg' + (kind ? ' ' + kind : '');
+  clearTimeout(msgTimer);
+  if(ms) msgTimer = setTimeout(function(){ m.textContent = ''; m.className = 'msg'; }, ms);
+}
+
+function skipPunct(){
+  if(!store.opts.ipunct) return;
+  while(pos < target.length && isPunct(target[pos])) pos++;
+}
+
+/* ---------- 输入 ---------- */
+function tick(){
+  var t = Date.now();
+  if(S.last && t - S.last < 3000) S.ms += t - S.last;
+  S.last = t;
+}
+
+function handleChar(ch){
+  if(locked || idx >= cur.ep.lines.length) return false;
+  if(ch === '\n' || ch === '\r') return true;
+  var want = target[pos];
+  tick();
+  if(same(ch, want)){
+    S.right++; pos++; skipPunct();
+    if(pos >= target.length){ draw(); completeLine(); return false; }
+    draw(); updateStats();
+    return true;
+  }
+  if(store.opts.ipunct && isPunct(ch)) return true;   // 多打的标点不算错
+  fail(want, ch);
+  return false;
+}
+
+function fail(want, got){
+  S.wrong++; lineWrong++;
+  locked = true;
+  var st = $('stage');
+  st.classList.remove('shake'); void st.offsetWidth;
+  st.classList.add('bad', 'shake');
+  setMsg('打错了：这里应该是 ' + charName(want) + '，你打的是 ' + charName(got) + '。整句重来。', 'err');
+  pos = 0; skipPunct();
+  draw(); updateStats();
+  setTimeout(function(){ st.classList.remove('bad', 'shake'); locked = false; }, 550);
+}
+
+function completeLine(){
+  locked = true; S.lines++;
+  var p = prog();
+  if(p.done.indexOf(idx) < 0) p.done.push(idx);
+  p.idx = idx + 1; save();
+  $('stage').classList.add('good');
+  setMsg(lineWrong ? '过了！这句打错了 ' + lineWrong + ' 次。' : '一次过！', 'okk');
+  updateStats(); renderLines();
+  clearTimeout(timer);
+  timer = setTimeout(function(){
+    $('stage').classList.remove('good'); locked = false;
+    idx++; renderLines(); renderStage(true);
+  }, 650);
+}
+
+function jump(i){
+  clearTimeout(timer); locked = false; $('stage').classList.remove('good', 'bad', 'shake');
+  idx = i; prog().idx = i; save();
+  renderLines(); renderStage(true); $('typer').focus();
+}
+
+function showFinish(){
+  $('practice').hidden = true;
+  var f = $('fin'); f.hidden = false;
+  var n = S.right + S.wrong;
+  var acc = n ? Math.round(S.right / n * 100) + '%' : '–';
+  var wpm = S.ms > 2500 ? Math.round((S.right / 5) / (S.ms / 60000)) : '–';
+  var secs = Math.round(S.ms / 1000);
+  var nextEp = cur.show.eps[cur.show.eps.indexOf(cur.ep) + 1];
+  f.innerHTML = '<h3>本集练完了</h3><p class="note">' + esc(cur.show.name) + ' — ' + esc(cur.ep.title) + '</p>' +
+    '<dl><div><dt>句数</dt><dd>' + cur.ep.lines.length + '</dd></div><div><dt>准确率</dt><dd>' + acc + '</dd></div>' +
+    '<div><dt>WPM</dt><dd>' + wpm + '</dd></div><div><dt>打错</dt><dd>' + S.wrong + '</dd></div>' +
+    '<div><dt>用时</dt><dd>' + Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2) + '</dd></div></dl>' +
+    '<div class="actions"><button class="btn pri" type="button" id="f-again">再练一遍</button>' +
+    (nextEp ? '<button class="btn" type="button" id="f-next">下一集：' + esc(nextEp.title) + '</button>' : '') + '</div>';
+  $('f-again').onclick = function(){
+    var p = prog(); p.idx = 0; p.done = []; save(); resetStats(); idx = 0;
+    renderPicker(); renderLines(); renderStage(true); $('typer').focus();
+  };
+  if(nextEp) $('f-next').onclick = function(){ setEpisode(cur.show.id, nextEp.id); $('typer').focus(); };
+  updateStats();
+}
+
+/* ---------- 发音 ---------- */
+var voices = [];
+function loadVoices(){
+  if(!('speechSynthesis' in window)) return;
+  try {
+    voices = speechSynthesis.getVoices().filter(function(v){ return /^en/i.test(v.lang); });
+  } catch(e) { voices = []; }
+  var sel = $('o-voice'); var keep = store.opts.voice;
+  sel.innerHTML = '<option value="">系统默认</option>';
+  voices.forEach(function(v){
+    var o = document.createElement('option'); o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')';
+    sel.appendChild(o);
+  });
+  sel.value = keep; if(sel.value !== keep) sel.value = '';
+}
+function speak(text){
+  if(!('speechSynthesis' in window)){ setMsg('这个浏览器不支持语音朗读。', 'err', 3000); return; }
+  try {
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = Number(store.opts.rate) || 1;
+    var v = voices.filter(function(x){ return x.name === store.opts.voice; })[0];
+    if(v){ u.voice = v; u.lang = v.lang; }
+    speechSynthesis.speak(u);
+  } catch(e) {}
+}
+if('speechSynthesis' in window){
+  try { speechSynthesis.onvoiceschanged = loadVoices; } catch(e) {}
+}
+
+/* ---------- 事件 ---------- */
+var typer = $('typer'), stage = $('stage');
+typer.addEventListener('compositionstart', function(){
+  composing = true; setMsg('检测到中文输入法，请切换到英文输入。', 'err', 3000);
+});
+typer.addEventListener('compositionend', function(){
+  setTimeout(function(){ composing = false; typer.value = ''; }, 0);
+});
+typer.addEventListener('input', function(){
+  var v = typer.value; typer.value = '';
+  if(composing) return;
+  for(var i = 0; i < v.length; i++){ if(!handleChar(v[i])) break; }
+});
+typer.addEventListener('keydown', function(e){
+  if(e.key === 'Tab' && !e.shiftKey){ e.preventDefault(); if(idx < cur.ep.lines.length) speak(target); }
+  else if(e.key === 'Escape'){ e.preventDefault(); restartLine(); }
+});
+stage.addEventListener('click', function(e){
+  if(e.target.closest('button,select,label,a')) return;
+  var w = e.target.closest('.w.ok');
+  if(w){ var word = w.getAttribute('data-w').replace(/[^\p{L}\p{N}']/gu, ''); if(word) speak(word); }
+  typer.focus();
+});
+
+function restartLine(){
+  if(locked || idx >= cur.ep.lines.length) return;
+  pos = 0; lineWrong = 0; skipPunct(); draw(); setMsg('', '');
+}
+$('b-play').onclick = function(){ if(idx < cur.ep.lines.length) speak(target); typer.focus(); };
+$('b-restart').onclick = function(){ restartLine(); typer.focus(); };
+$('b-prev').onclick = function(){ if(idx > 0) jump(idx - 1); else typer.focus(); };
+$('b-skip').onclick = function(){ if(idx < cur.ep.lines.length - 1) jump(idx + 1); else { idx = cur.ep.lines.length; prog().idx = idx; save(); renderLines(); renderStage(false); } };
+
+/* 设置 */
+function bindOpt(id, key, kind){
+  var el = $(id);
+  if(kind === 'chk') el.checked = !!store.opts[key]; else el.value = String(store.opts[key]);
+  el.addEventListener('change', function(){
+    store.opts[key] = kind === 'chk' ? el.checked : (kind === 'num' ? Number(el.value) : el.value);
+    save();
+    if(idx < cur.ep.lines.length){
+      if(key === 'zh') $('zh').textContent = (store.opts.zh && cur.ep.lines[idx][2]) ? cur.ep.lines[idx][2] : '';
+      if(key === 'ipunct') skipPunct();
+      draw();
+    }
+  });
+}
+bindOpt('o-auto','auto','chk'); bindOpt('o-dict','dict','chk'); bindOpt('o-zh','zh','chk');
+bindOpt('o-icase','icase','chk'); bindOpt('o-ipunct','ipunct','chk');
+bindOpt('o-rate','rate','num'); bindOpt('o-voice','voice','str');
+
+/* ---------- 剧本库（IndexedDB） ---------- */
+function idb(mode, fn){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open('lines-typer', 1);
+    r.onupgradeneeded = function(){ r.result.createObjectStore('kv'); };
+    r.onerror = function(){ rej(r.error); };
+    r.onsuccess = function(){
+      var db = r.result, tx = db.transaction('kv', mode), q = fn(tx.objectStore('kv'));
+      tx.oncomplete = function(){ db.close(); res(q && q.result); };
+      tx.onerror = function(){ rej(tx.error); };
+    };
+  });
+}
+function dbGet(){ return idb('readonly', function(s){ return s.get('library'); }); }
+function persistLib(){
+  return idb('readwrite', function(s){ return s.put(JSON.parse(JSON.stringify(store.custom)), 'library'); })
+    .catch(function(){ libMsg('浏览器不允许保存剧本库，关闭页面后需要重新导入。', true); });
+}
+function libMsg(t, err){ var m = $('impmsg'); m.textContent = t; m.className = err ? 'err' : 'okk'; }
+function armBtn(b, label, armLabel, fn){
+  var armed = false, t;
+  b.onclick = function(){
+    if(!armed){ armed = true; b.textContent = armLabel; t = setTimeout(function(){ armed = false; b.textContent = label; }, 3000); return; }
+    clearTimeout(t); fn();
+  };
+}
+
+/* ---------- 解析 JSON ---------- */
+function toLines(arr, strip){
+  return (Array.isArray(arr) ? arr : []).map(function(l){
+    var who = '', body = '', zh = '';
+    if(typeof l === 'string'){
+      var m = l.match(/^([A-Za-z][A-Za-z .'\-]{0,24}):\s*(.*)$/);
+      if(m){ who = m[1]; body = m[2]; } else body = l;
+    } else if(Array.isArray(l)){ who = l[0] || ''; body = l[1] || ''; zh = l[2] || ''; }
+    else if(l && typeof l === 'object'){ who = l.speaker || l.who || l.name || ''; body = l.text || l.en || ''; zh = l.zh || l.cn || l.translation || ''; }
+    body = String(body);
+    if(strip) body = body.replace(/\[[^\]]*\]|\([^)]*\)/g, '');
+    return [String(who).trim(), normText(body), String(zh).trim()];
+  }).filter(function(x){ return /[A-Za-z]/.test(x[1]); });
+}
+function collect(d, def, out){
+  if(Array.isArray(d)){ d.forEach(function(x){ collect(x, def, out); }); return; }
+  if(!d || typeof d !== 'object') return;
+  var show = String(d.show || d.series || def.show).trim();
+  if(Array.isArray(d.episodes)){ d.episodes.forEach(function(e){ collect(e, {show:show, title:def.title, file:def.file}, out); }); return; }
+  if(Array.isArray(d.lines)) out.push({show:show, id:d.id, title:String(d.episode || d.title || def.title).trim(), order:d.order, lines:d.lines, file:def.file});
+}
+function sortEps(sh){
+  sh.eps.sort(function(a, b){
+    var ao = a.order == null ? 1e9 : a.order, bo = b.order == null ? 1e9 : b.order;
+    if(ao !== bo) return ao - bo;
+    return a.title.localeCompare(b.title, undefined, {numeric:true});
+  });
+}
+function addEps(list, strip, into, pre){
+  into = into || store.custom; pre = pre || 's:';
+  var r = {added:0, bad:0, sid:null, eid:null};
+  list.forEach(function(e){
+    var lines = toLines(e.lines, strip);
+    if(!lines.length){ r.bad++; return; }
+    var sid = pre + e.show, eid = 'e:' + (e.id || e.title);
+    var sh = into.filter(function(x){ return x.id === sid; })[0];
+    if(!sh){ sh = {id:sid, name:e.show, custom:into === store.custom, eps:[]}; into.push(sh); }
+    var ep = {id:eid, title:e.title, order:typeof e.order === 'number' ? e.order : null, file:e.file || '', lines:lines};
+    var i = -1; sh.eps.forEach(function(x, k){ if(x.id === eid) i = k; });
+    if(i >= 0) sh.eps[i] = ep; else sh.eps.push(ep);
+    sortEps(sh);
+    if(!r.added){ r.sid = sid; r.eid = eid; }
+    r.added++;
+  });
+  return r;
+}
+function readFiles(files){
+  var strip = $('i-strip').checked;
+  var arr = Array.prototype.slice.call(files).filter(function(f){ return /\.json$/i.test(f.name); });
+  if(!arr.length){ libMsg('没有找到 .json 文件。', true); return; }
+  var out = [], errs = [];
+  Promise.all(arr.map(function(f){
+    return f.text().then(function(t){
+      var d = JSON.parse(t.replace(/^﻿/, ''));
+      var rel = (f.webkitRelativePath || '').split('/');
+      var folder = rel.length > 1 ? rel[rel.length - 2] : '';
+      collect(d, {show:folder || '未命名剧本', title:f.name.replace(/\.json$/i, ''), file:f.name}, out);
+    }).catch(function(e){ errs.push(f.name + '（' + (e && e.message ? e.message : '格式错误') + '）'); });
+  })).then(function(){
+    var r = addEps(out, strip);
+    var t = r.added ? '已载入 ' + r.added + ' 集。' : '没有载入任何剧本。';
+    if(r.bad) t += r.bad + ' 集没有可用的英文台词。';
+    if(errs.length) t += '读取失败：' + errs.join('；');
+    libMsg(t, !r.added || errs.length > 0);
+    if(r.added){ persistLib(); setEpisode(r.sid, r.eid); } else renderLib();
+  });
+}
+function entryFiles(entry, path, acc){
+  return new Promise(function(res){
+    if(entry.isFile){
+      entry.file(function(f){ try { Object.defineProperty(f, 'webkitRelativePath', {value:path + f.name}); } catch(e) {} acc.push(f); res(); }, function(){ res(); });
+    } else {
+      var rd = entry.createReader(), all = [];
+      (function step(){
+        rd.readEntries(function(es){
+          if(!es.length){ Promise.all(all.map(function(x){ return entryFiles(x, path + entry.name + '/', acc); })).then(function(){ res(); }); return; }
+          all = all.concat(Array.prototype.slice.call(es)); step();
+        }, function(){ res(); });
+      })();
+    }
+  });
+}
+
+/* ---------- 剧本库界面 ---------- */
+function removeEp(sid, eid){
+  var sh = store.custom.filter(function(x){ return x.id === sid; })[0];
+  if(!sh) return;
+  sh.eps = sh.eps.filter(function(x){ return x.id !== eid; });
+  if(!sh.eps.length) store.custom = store.custom.filter(function(x){ return x !== sh; });
+  delete store.prog[sid + '/' + eid];
+  save(); persistLib();
+  if(cur.show.id === sid && cur.ep.id === eid) setEpisode(base()[0].id, base()[0].eps[0].id); else renderPicker();
+}
+function renderLib(){
+  var box = $('lib'); box.innerHTML = '';
+  if(remote.length){
+    var n = 0; remote.forEach(function(s){ n += s.eps.length; });
+    box.insertAdjacentHTML('beforeend', '<p class="note">网站自带 ' + remote.length + ' 部剧、' + n + ' 集，来自仓库的 scripts 文件夹，要改请直接改那里的 JSON。下面是只存在这个浏览器里的本地剧本。</p>');
+  }
+  if(!store.custom.length){ box.innerHTML = '<p class="note">还没有导入剧本。</p>'; return; }
+  store.custom.forEach(function(sh){
+    var g = document.createElement('div'); g.className = 'lg';
+    var h = document.createElement('div'); h.className = 'lh';
+    h.innerHTML = '<b>' + esc(sh.name) + '</b><span>' + sh.eps.length + ' 集</span>';
+    g.appendChild(h);
+    sh.eps.forEach(function(ep){
+      var r = document.createElement('div'); r.className = 'lr';
+      var t = document.createElement('button'); t.type = 'button'; t.className = 'linkbtn lt';
+      t.textContent = ep.title + ' · ' + ep.lines.length + ' 句';
+      t.onclick = function(){ setEpisode(sh.id, ep.id); };
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'linkbtn'; d.textContent = '删除';
+      armBtn(d, '删除', '确认？', function(){ removeEp(sh.id, ep.id); });
+      r.appendChild(t); r.appendChild(d); g.appendChild(r);
+    });
+    box.appendChild(g);
+  });
+  var c = document.createElement('button'); c.type = 'button'; c.className = 'linkbtn'; c.textContent = '清空剧本库';
+  armBtn(c, '清空剧本库', '再点一次，确认清空', function(){
+    store.custom = [];
+    Object.keys(store.prog).forEach(function(k){ if(!base().some(function(b){ return k.indexOf(b.id + '/') === 0; })) delete store.prog[k]; });
+    save(); persistLib(); libMsg('剧本库已清空。', false); setEpisode(base()[0].id, base()[0].eps[0].id);
+  });
+  box.appendChild(c);
+}
+
+/* ---------- 读取仓库里的 scripts/ ---------- */
+function loadRemote(){
+  return fetch('scripts/index.json', {cache:'no-cache'}).then(function(r){
+    if(!r.ok) throw new Error('no index'); return r.json();
+  }).then(function(idx){
+    var files = Array.isArray(idx) ? idx : (idx.files || []);
+    var out = [];
+    return Promise.all(files.map(function(p){
+      var url = 'scripts/' + p.split('/').map(encodeURIComponent).join('/');
+      return fetch(url, {cache:'no-cache'}).then(function(r){
+        if(!r.ok) throw new Error(r.status); return r.json();
+      }).then(function(d){
+        var parts = p.split('/'), folder = parts.length > 1 ? parts[parts.length - 2] : '';
+        collect(d, {show:folder || '未命名剧本', title:parts[parts.length - 1].replace(/\.json$/i, ''), file:p}, out);
+      }).catch(function(){ /* 单个文件失败不影响其他 */ });
+    })).then(function(){
+      var r = [];
+      addEps(out, true, r, 'r:');
+      remote = r;
+    });
+  }).catch(function(){ remote = []; });
+}
+
+/* 导入入口 */
+$('b-files').onclick = function(){ $('f-files').click(); };
+$('b-folder').onclick = function(){ $('f-folder').click(); };
+['f-files', 'f-folder'].forEach(function(id){
+  var el = $(id);
+  el.addEventListener('change', function(){ var fs = Array.prototype.slice.call(el.files); el.value = ''; readFiles(fs); });
+});
+var drop = $('drop');
+drop.onclick = function(){ $('f-files').click(); };
+drop.onkeydown = function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); $('f-files').click(); } };
+['dragenter', 'dragover'].forEach(function(n){ drop.addEventListener(n, function(e){ e.preventDefault(); drop.classList.add('over'); }); });
+['dragleave', 'drop'].forEach(function(n){ drop.addEventListener(n, function(){ drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function(e){
+  e.preventDefault();
+  var dt = e.dataTransfer, items = dt.items, ents = [];
+  if(items && items.length && items[0].webkitGetAsEntry){
+    for(var i = 0; i < items.length; i++){ var en = items[i].webkitGetAsEntry(); if(en) ents.push(en); }
+    var acc = [];
+    Promise.all(ents.map(function(en){ return entryFiles(en, '', acc); })).then(function(){ readFiles(acc); });
+  } else readFiles(dt.files);
+});
+$('b-copytpl').onclick = function(){
+  var t = $('tpl').textContent;
+  var fb = function(){ var r = document.createRange(); r.selectNodeContents($('tpl')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); libMsg('已选中模板，请按 Ctrl/⌘+C 复制。', false); };
+  try { navigator.clipboard.writeText(t).then(function(){ libMsg('模板已复制。', false); }, fb); } catch(e) { fb(); }
+};
+$('tpl').textContent = JSON.stringify({
+  show:'My Show', episode:'S01E01 Pilot', order:1,
+  lines:[
+    {speaker:'Maya', text:'Good morning! You look tired.', zh:'早上好！你看起来很累。'},
+    {speaker:'Ben', text:"I didn't sleep at all."}
+  ]
+}, null, 2);
+
+/* ---------- 启动 ---------- */
+loadVoices();
+var legacy = store.custom; store.custom = [];
+dbGet().catch(function(){ return null; }).then(function(lib){
+  store.custom = Array.isArray(lib) ? lib : [];
+  if(legacy.length){
+    legacy.forEach(function(sh){ if(!store.custom.some(function(x){ return x.name === sh.name; })) store.custom.push(sh); });
+    persistLib();
+  }
+  return loadRemote();
+}).then(function(){
+  var last = store.last || {};
+  if(remote.length) $('imp').open = false;
+  setEpisode(last.show || base()[0].id, last.ep || base()[0].eps[0].id);
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+{
+  "show": "Corner Café",
+  "episode": "S01E01 A Very Wet Morning",
+  "order": 1,
+  "lines": [
+    {
+      "speaker": "Maya",
+      "text": "Good morning! You look like you didn't sleep at all.",
+      "zh": "早上好！你看起来一夜没睡。"
+    },
+    {
+      "speaker": "Ben",
+      "text": "I didn't. My neighbor practiced the drums until three.",
+      "zh": "我确实没睡。邻居练鼓练到凌晨三点。"
+    },
+    {
+      "speaker": "Maya",
+      "text": "Then you need a large coffee, and maybe a nap.",
+      "zh": "那你需要一大杯咖啡，也许还要小睡一会儿。"
+    },
+    {
+      "speaker": "Ben",
+      "text": "Just the coffee, please. I have a meeting at nine.",
+      "zh": "只要咖啡就好。我九点有个会。"
+    },
+    {
+      "speaker": "Maya",
+      "text": "Sure thing. Would you like milk or sugar?",
+      "zh": "没问题。要加奶或者糖吗？"
+    },
+    {
+      "speaker": "Ben",
+      "text": "Black is fine. Wait, is that my umbrella by the door?",
+      "zh": "黑咖啡就行。等等，门边那把是我的伞吗？"
+    },
+    {
+      "speaker": "Maya",
+      "text": "I think someone left it here yesterday.",
+      "zh": "我想是昨天有人落在这儿的。"
+    },
+    {
+      "speaker": "Ben",
+      "text": "It is mine! I have been looking for it all week.",
+      "zh": "就是我的！我找了一整个星期。"
+    },
+    {
+      "speaker": "Maya",
+      "text": "Then today is your lucky day. That will be three dollars.",
+      "zh": "那今天是你的幸运日。一共三美元。"
+    },
+    {
+      "speaker": "Ben",
+      "text": "Keep the change. And thanks for taking care of my umbrella.",
+      "zh": "不用找了。谢谢你帮我保管雨伞。"
+    },
+    {
+      "speaker": "Maya",
+      "text": "Anytime. Try not to lose it again.",
+      "zh": "随时欢迎。别再弄丢了。"
+    },
+    {
+      "speaker": "Ben",
+      "text": "No promises. See you tomorrow!",
+      "zh": "不敢保证。明天见！"
+    }
+  ]
+}
